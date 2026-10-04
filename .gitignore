@@ -1,0 +1,66 @@
+# Gradle / Kotlin / Android native build caches
+.gradle/
+.kotlin/
+**/build/
+.cxx/
+.externalNativeBuild/
+
+# Local SDK paths, IDE state and machine configuration
+local.properties
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Generated packages, symbols, logs and profiling output
+/artifacts/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.hprof
+*.log
+
+# Signing keys and private signing configuration
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+keystore.properties
+signing.properties
+!keystore.properties.example
+!signing.properties.example
+
+# Local credentials; keep sanitized configuration examples in version control
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!.env.sample
+!*.env.example
+!*.env.sample
+/deployment/*.local.conf.json
+
+# Python helper caches and local virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# OS metadata and editor temporary files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+
+# Intentionally tracked: gradle/wrapper/, gradle/libs.versions.toml,
+# app/schemas/, deployment/*.example and the LAL configuration template.
