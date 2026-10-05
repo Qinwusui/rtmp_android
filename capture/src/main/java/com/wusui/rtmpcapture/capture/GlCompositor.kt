@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong
 class GlCompositor(
     private var settings: CaptureSettings,
     private val originNs: Long,
-    private val cameraRotation: Int,
+    initialDeviceDegrees: Int,
     private val fatal: (String) -> Unit,
 ) {
     private val thread = HandlerThread("capture-gl").apply { start() }
@@ -59,6 +59,9 @@ class GlCompositor(
     private val stMatrix = FloatArray(16)
     private val cameraMatrix = FloatArray(16)
     private val combinedMatrix = FloatArray(16)
+    private var deviceDegrees=initialDeviceDegrees
+    private var matrixDeviceDegrees=-1
+    private var matrixProducerSwapped:Boolean?=null
     private var posLocation = 0
     private var uvLocation = 0
     private var matrixLocation = 0
@@ -90,14 +93,6 @@ class GlCompositor(
             setDefaultBufferSize(settings.width, settings.height)
             setOnFrameAvailableListener({ cameraPending = true }, handler)
         }
-        // Rotate and center-crop the camera into the fixed encoder aspect ratio.
-        Matrix.setIdentityM(cameraMatrix, 0)
-        Matrix.translateM(cameraMatrix,0,.5f,.5f,0f)
-        Matrix.rotateM(cameraMatrix,0,cameraRotation.toFloat(),0f,0f,1f)
-        val rotatedAspect = if (cameraRotation % 180 == 0) settings.width.toFloat()/settings.height else settings.height.toFloat()/settings.width
-        val outputAspect = settings.width.toFloat()/settings.height
-        Matrix.scaleM(cameraMatrix,0,if(rotatedAspect > outputAspect) outputAspect/rotatedAspect else 1f,if(rotatedAspect < outputAspect) rotatedAspect/outputAspect else 1f,1f)
-        Matrix.translateM(cameraMatrix,0,-.5f,-.5f,0f)
         running = true
         nextTickNs = SystemClock.elapsedRealtimeNanos()
         handler.post(tick)
@@ -122,6 +117,10 @@ class GlCompositor(
         PipLayout.captureSize(settings,width,height).also { screenSt?.setDefaultBufferSize(it.first,it.second) }
     }
     fun screenVisibility(visible: Boolean) { handler.post { screenVisible = visible } }
+    fun setDeviceOrientation(degrees:Int) {
+        require(degrees in listOf(0,90,180,270))
+        handler.post { deviceDegrees=degrees }
+    }
     fun removeScreen() { call { releaseScreen() } }
     fun updateSettings(value: CaptureSettings) { handler.post { settings = settings.copy(corner=value.corner,pipWidth=value.pipWidth,pipMaxHeight=value.pipMaxHeight) } }
 
@@ -181,6 +180,11 @@ class GlCompositor(
         val x = (width-w)/2; val y=(height-h)/2
         GLES20.glViewport(x,y,w,h)
         cameraSt?.getTransformMatrix(stMatrix)
+        val producerSwapped=CameraOrientation.producerSwapsAxes(stMatrix)
+        if(matrixDeviceDegrees!=deviceDegrees || matrixProducerSwapped!=producerSwapped) {
+            CameraOrientation.writeUvMatrix(cameraMatrix,settings.width,settings.height,settings.width,settings.height,producerSwapped,deviceDegrees)
+            matrixDeviceDegrees=deviceDegrees; matrixProducerSwapped=producerSwapped
+        }
         Matrix.multiplyMM(combinedMatrix,0,stMatrix,0,cameraMatrix,0)
         quad(cameraTexture,combinedMatrix)
         if (hasScreen && screenVisible && screenSt != null) {

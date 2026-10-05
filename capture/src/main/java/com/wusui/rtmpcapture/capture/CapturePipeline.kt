@@ -12,6 +12,7 @@ class CapturePipeline(private val context:Context,private var settings:CaptureSe
     private var audio:AudioEncoder?=null
     private var gl:GlCompositor?=null
     private var camera:CameraSource?=null
+    private var orientation:DeviceOrientationMonitor?=null
     private var projection:ProjectionSource?=null
     private var transport:RtmpTransport?=null
     private var profile:HardwareProfile?=null
@@ -30,11 +31,14 @@ class CapturePipeline(private val context:Context,private var settings:CaptureSe
     fun start(address:String) {
         val profile=Hardware.validate(context,settings).also { this.profile=it }
         originNs=SystemClock.elapsedRealtimeNanos(); lastSampleNs=originNs; active=true
+        orientation=DeviceOrientationMonitor(context) { gl?.setDeviceOrientation(it) }
+        requireNotNull(orientation).start()
         transport=RtmpTransport(settings,{ value,text -> connected=value; message=text },fatal,{ video?.keyframe() })
         video=VideoEncoder(settings,profile.codecName,{ transport },fatal)
         val encoder=requireNotNull(video).start()
-        gl=GlCompositor(settings,originNs,profile.sensorRotation,fatal)
+        gl=GlCompositor(settings,originNs,requireNotNull(orientation).degrees,fatal)
         val surface=requireNotNull(gl).start(encoder).also { cameraInput=it }
+        gl?.setDeviceOrientation(requireNotNull(orientation).degrees)
         camera=CameraSource(context,profile,fatal,cameraInterrupted)
         requireNotNull(camera).start(surface)
         audio=AudioEncoder(originNs,{ buffer,info -> transport?.sendAudio(buffer,info) },fatal)
@@ -86,6 +90,7 @@ class CapturePipeline(private val context:Context,private var settings:CaptureSe
     }
     fun close() {
         active=false
+        runCatching { orientation?.close() }; orientation=null
         runCatching { detachScreen() }
         runCatching { camera?.close() }; camera=null
         cameraInput=null; profile=null
